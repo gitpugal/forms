@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model users {
+  user_id                  String                      @id @default(uuid())
+  email                    String                      @unique
+  password                 String?
+  first_name               String?
+  last_name                String?
+  profile_image            String?
+  created_at               DateTime                    @default(now()) @db.Timestamptz
+  updated_at               DateTime                    @default(now()) @db.Timestamptz
+  last_logged_in           DateTime?                   @db.Timestamptz
+  phone                    String?
+  verified                 Boolean?
+  onboarded                Boolean?                    @default(false)
+  organizations            UserOrganization[]
+  collaborators            collaborators[]
+  organization_invitations organization_invitations[]
+  UserVerification         UserVerification[]
+  UserPasswordReset        UserPasswordReset[]
+  admin_organizations      organizations[]             @relation("AdminOrganizations")
+  login_type               String                      @default("site")
+  integrations             Json?
+  pro                      Boolean   @default(false)
+  expires_at               DateTime?
+  subscriptions             subscriptions[]
+  stripe_id               String?
+}
+
+model UserVerification {
+  verification_id Int      @id @default(autoincrement())
+  user_id         String
+  auth_key        String   @unique
+  created_at      DateTime @default(now()) @db.Timestamptz
+  expires_at      DateTime @db.Timestamptz
+  users           users    @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model UserPasswordReset {
+  reset_id        Int      @id @default(autoincrement())
+  user_id         String
+  auth_key        String   @unique
+  created_at      DateTime @default(now()) @db.Timestamptz
+  expires_at      DateTime @db.Timestamptz
+  users           users    @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model organizations {
+  organization_id          String                      @id @default(uuid())
+  name                     String
+  admin_id                 String
+  created_at               DateTime                    @default(now()) @db.Timestamptz
+  disabled                 Boolean                     @default(false)
+  users                    UserOrganization[]
+  workspaces               workspaces[]
+  organization_invitations organization_invitations[]
+  admin                    users                       @relation(fields: [admin_id], references: [user_id], name: "AdminOrganizations")
+}
+
+model workspaces {
+  workspace_id    String    @id @default(uuid())
+  organization_id String
+  name            String
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  organizations   organizations @relation(fields: [organization_id], references: [organization_id], onDelete: Cascade, onUpdate: NoAction)
+  collaborators   collaborators[]
+  forms           forms[]
+  description     String
+  organization_invitations organization_invitations[]
+  
+
+  @@unique([organization_id, name])
+}
+
+model collaborators {
+  collaborator_id String    @id @default(uuid())
+  user_id         String
+  workspace_id    String
+  role            Role
+  assigned_at     DateTime  @default(now()) @db.Timestamptz
+  users           users      @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+  workspaces      workspaces @relation(fields: [workspace_id], references: [workspace_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model organization_invitations {
+  invitation_id     String           @id @default(uuid())
+  email             String
+  organization_id   String
+  workspace_id      String
+  invited_by        String
+  role              Role
+  invitation_status InvitationStatus @default(pending)
+  created_at        DateTime         @default(now()) @db.Timestamptz
+  updated_at        DateTime         @updatedAt @db.Timestamptz
+  users             users            @relation(fields: [email], references: [email])
+  organizations     organizations    @relation(fields: [organization_id], references: [organization_id], onDelete: Cascade, onUpdate: NoAction)
+  workspaces        workspaces       @relation(fields: [workspace_id], references: [workspace_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([organization_id])
+  @@index([workspace_id])
+}
+model subscriptions {
+  subscription_id     String           @id @default(uuid())
+  user_id            String
+  status             String           @default("idle")
+  price_id           String           
+  transaction_id     String?
+  users              users            @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+  expires_at         DateTime?
+  name               String?
+  cancel             Boolean?         @default(false)
+}
+
+
+model forms {
+  form_id         String    @id @default(uuid())
+  workspace_id    String
+  title           String
+  description     String?
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  updated_at      DateTime  @updatedAt @db.Timestamptz
+  published       Boolean?  @default(false)
+  opened_count    Int?      @default(0)
+  submitted_count Int?      @default(0)
+  api_submitted_count Int?  @default(0)
+  form_json       Json[]
+  workspaces      workspaces @relation(fields: [workspace_id], references: [workspace_id], onDelete: Cascade, onUpdate: NoAction)
+  form_responses  form_responses[]
+  form_api_key    String    @default(uuid())
+  bannerUrl       String?
+  logoUrl         String?
+  integrations    Json?
+  theme           String    @default("light")
+  customTheme     Json?
+  redirect_url    String?  
+  redirect        Boolean?  @default(false)
+  submission_limit Int?    @default(-1)
+  user_form_cache Boolean?  @default(false)
+  email_notify    Boolean?  @default(false)      
+  trash           Boolean?  @default(false)
+  closed          Boolean?  @default(false)
+  branding        Boolean?  @default(true)
+  formorder       Int       @default(0)
+  api_key         String?   @default(uuid())
+  api_enabled     Boolean?  @default(false)
+  public          Boolean?  @default(false)
+  scheduler       Boolean?  @default(false)
+ 
+  @@unique([workspace_id, title])
+}
+
+model form_responses {
+  response_id  String    @id @default(uuid())
+  form_id      String
+  submitted_at DateTime  @default(now()) @db.Timestamptz
+  responses    Json
+  forms        forms     @relation(fields: [form_id], references: [form_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model UserOrganization {
+  user_id          String
+  organization_id  String
+  joined_at        DateTime  @default(now()) @db.Timestamptz
+  users            users         @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+  organizations    organizations @relation(fields: [organization_id], references: [organization_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, organization_id])
+}
+
+enum Role {
+  admin
+  member
+  orgadmin
+}
+
+enum InvitationStatus {
+  pending
+  accepted
+  declined
+}
